@@ -1,0 +1,205 @@
+SOA AFC: https://afc.soa.org/#Calculator
+
+Inputs:
+
+Name: Considered Range
+
+Discount Rate: 0-1 (NOTE: I will develop a calculator that permits Discount rates to be provided as a full yield curve of future rates. This permits more modelling flexibility, and is more consistent with typical pension vals which use segment rates.)
+Annual COLA: 0-1
+Annuity Type: SLA, J&S, C&L, JL
+Survivor Benefit Prct: 0-1
+Payment Frequency: Annual BOY, Annual EOY, Monthly Exact BOM, Monthly Exact EOM, Monthly Appx 11/24 BOM 
+Certain Period (years): 0-15
+Benefit Commencement Age: 55-120
+Primary Annuitant Age: 20-120
+Primary Annuitant Gender: M, F
+Beneficiary Age: 20-120
+Beneficiary Gender: M, F
+Valuation Year: 1990-2030
+Mortality Before BCA: * Mortality Tables
+Mortality After BCA: * Mortality Tables
+Projection Method: None, Static, Generational
+Projection Scale: * Projection Scales
+Static Projection Years: 0-50
+Blend Mortality Rates?: TRUE, FALSE
+Blending Male Percentage: 0-1
+Setback Years, Male: -10 -> 10
+Setback Years, Female: -10 -> 10
+
+*Mortality Tables: 
+1951_GAM
+1971_GAM
+1983_GAM
+1983_GAM_basic
+1983_IAM
+UP84_unisex
+RP1992_CombinedHealthy
+RP1992_Employed
+RP1992_Disabled
+1994_GAM_Static
+1994_GAR
+UP_94
+RP2000_Employee
+RP2000_Disabled
+RP2000_CombinedHealthy
+RP2000_BlueCollar
+RP2000_WhiteCollar
+RP2006_Employee
+RP2006_HealthyAnnuit
+RP2006_Total
+RP2006_Disabled
+RP2006_BlueCol_Employee
+RP2006_BlueCol_HealthyAnnuit
+RP2006_BlueCol
+RP2006_WhiteCol_Employee
+RP2006_WhiteCol_HealthyAnnuit
+RP2006_WhiteCol
+RP2006_Bot25%_Employee
+RP2006_Bot25%_HealthyAnnuit
+RP2006_Bot25%
+RP2006_Top25%_Employee
+RP2006_Top25%_HealthyAnnuit
+RP2006_Top25%
+RPH2006_Employee
+RPH2006_HlthyAnn
+RPH2006_Disabled
+RPH2006_BlueCol_EE
+RPH2006_BlueCol_HlthyAnn
+RPH2006_WhiteCol_EE
+RPH2006_WhiteCol_HlthyAnn
+RPH2006_Bot25_EE
+RPH2006_Bot25_HlthyAnn
+RPH2006_Top25_EE
+RPH2006_Top25_HlthyAnn
+Pub_2010_ContSurvivor
+PubH_2010_ContSurvivor
+PubH_2010A_ContSurvivor
+PubH_2010B_ContSurvivor
+Pub_2010A_ContSurvivor
+Pub_2010B_ContSurvivor
+PubG_2010_Employee
+PubG_2010_Retiree
+PubG_2010A_Employee
+PubG_2010A_Retiree
+PubG_2010B_Employee
+PubG_2010B_Retiree
+PubGH_2010_Employee
+PubGH_2010_Retiree
+PubGH_2010A_Employee
+PubGH_2010A_Retiree
+PubGH_2010B_Employee
+PubGH_2010B_Retiree
+PubNS_2010_Disabled
+PubNSH_2010_Disabled
+PubS_2010_Disabled
+PubS_2010_Employee
+PubS_2010_Retiree
+PubS_2010A_Employee
+PubS_2010A_Retiree
+PubS_2010B_Employee
+PubS_2010B_Retiree
+PubSH_2010_Disabled
+PubSH_2010_Employee
+PubSH_2010_Retiree
+PubSH_2010A_Employee
+PubSH_2010A_Retiree
+PubSH_2010B_Employee
+PubSH_2010B_Retiree
+PubT_2010_Employee
+PubT_2010_Retiree
+PubT_2010A_Employee
+PubT_2010A_Retiree
+PubT_2010B_Employee
+PubT_2010B_Retiree
+PubTH_2010_Employee
+PubTH_2010_Retiree
+PubTH_2010A_Employee
+PubTH_2010A_Retiree
+PubTH_2010B_Employee
+PubTH_2010B_Retiree
+2012_IAM_Basic
+2012_IAM_Period
+Pri2012_Total_Employee
+Pri2012_Total_Retiree
+Pri2012_Total_NondisAnn
+Pri2012_Total_Disabled
+Pri2012_Total_ContAnn
+Pri2012_BlueCol_Employee
+Pri2012_BlueCol_Retiree
+Pri2012_BlueCol_NondisAnn
+Pri2012_BlueCol_ContAnn
+Pri2012_WhiteCol_Employee
+Pri2012_WhiteCol_Retiree
+Pri2012_WhiteCol_NondisAnn
+Pri2012_WhiteCol_ContAnn
+Pri2012_Bot25_Employee
+Pri2012_Bot25_Retiree
+Pri2012_Top25_Employee
+Pri2012_Top25_Retiree
+PriH2012_Total_Employee
+PriH2012_Total_Retiree
+PriH2012_Total_ContAnn
+PriH2012_Total_NondisAnn
+PriH2012_Total_Disabled
+PriH2012_BlueCol_Employee
+PriH2012_BlueCol_Retiree
+PriH2012_BlueCol_ContAnn
+PriH2012_BlueCol_NondisAnn
+PriH2012_WhiteCol_Employee
+PriH2012_WhiteCol_Retiree
+PriH2012_WhiteCol_ContAnn
+PriH2012_WhiteCol_NondisAnn
+PriH2012_Bot25_Employee
+PriH2012_Bot25_Retiree
+PriH2012_Top25_Employee
+PriH2012_Top25_Retiree
+RP2014_Employee
+RP2014_HealthyAnnuit
+RP2014_Disabled
+RP2014_Total
+RP2014_BlueCol_Employee
+RP2014_BlueCol_HealthyAnnuit
+RP2014_BlueCol
+RP2014_WhiteCol_Employee
+RP2014_WhiteCol_HealthyAnnuit
+RP2014_WhiteCol
+RP2014_Bot25%_Employee
+RP2014_Bot25%_HealthyAnnuit
+RP2014_Bot25%
+RP2014_Top25%_Employee
+RP2014_Top25%_HealthyAnnuit
+RP2014_Top25%
+RPH2014_Employee
+RPH2014_HealthyAnnuit
+RPH2014_Disabled
+RPH2014_BlueCol_Employee
+RPH2014_BlueCol_HealthyAnnuit
+RPH2014_WhiteCol_Employee
+RPH2014_WhiteCol_HealthyAnnuit
+RPH2014_Bot25%_Employee
+RPH2014_Bot25%_HealthyAnnuit
+RPH2014_Top25%_Employee
+RPH2014_Top25%_HealthyAnnuit
+CPM2014
+CPM2014_Public
+CPM2014_Private
+
+** Projection Scales
+G2
+BB_1D
+BB_2D
+AA
+MP2014
+MP2015
+MP2016
+MP2017
+MP2018
+MP2019
+MP2020
+MP2021
+CPM2014_B
+CPM2014_B2
+MI2017
+VBT2015
+
+Also consider: Full interest curve (ie no single rate).
