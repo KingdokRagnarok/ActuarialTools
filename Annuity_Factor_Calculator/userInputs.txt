@@ -1,0 +1,1 @@
+{"DiscountRate": 0.05, "AnnuityType": "SLA", "PaymentFrequency": "ABOY", "BenefitCommencementAge": 65, "PrimaryAnnuitantAge": 45, "PrimaryAnnuitantGender": "M", "MortalityBeforeBCA": "Pri2012_Total_Employee", "MortalityAfterBCA": "Pri2012_Total_Retiree"}
