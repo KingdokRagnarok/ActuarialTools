@@ -26,12 +26,15 @@ class Annuity_Factor_Calculator:
                 return 0
             case 'AEOY':
                 return 1
-            case 'MEBOM':
-                return "NOT BUILT YET" #TODO
-            case 'MEEOM':
-                return "NOT BUILT YET" #TODO
+            case 'MBOM':
+                print("NOT BUILT YET") #TODO
+                return 0
+            case 'MEOM':
+                print("NOT BUILT YET") #TODO
+                return 0
             case 'MAPPX':
-                return "NOT BUILT YET" #TODO
+                print("NOT BUILT YET") #TODO
+                return 0
             case _:
                 return "INVALID INPUT"
 
