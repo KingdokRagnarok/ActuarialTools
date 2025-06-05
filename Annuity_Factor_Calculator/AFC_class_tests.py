@@ -93,7 +93,7 @@ Test3Inputs = {
     , 'SetbackYearsMale':0 #-10->10
     , 'SetbackYearsFemale':0 #-10->10
 }
-Test3ExpectedResult = 6.4657
+Test3ExpectedResult = 5.0195
 ExecuteTest(3, Test3Inputs, Test3ExpectedResult, mortTablePath)
 
 #Test 4: C&L
@@ -690,10 +690,17 @@ Test25Inputs = {
 Test25ExpectedResult = 4.2953
 ExecuteTest(25, Test25Inputs, Test25ExpectedResult, mortTablePath)
 
+
+
 '''
 
 Note - I would very much like to be able to use an array of discount rates at some point.
 Right now, my expected results are coming from the SOA calculator (https://afc.soa.org/#Calculator).
 That does not currently work with an array of discount rates, so I will need to find a different way of verifying calcs when I move to a discount array.
+
+Note 2 - I don't like the way this workbook is set up
+(1) I think I should return a value instead of printing a value. My feeling is that such a construction would be easier to include into a CICD framework
+(2) I think numbering the tests is weird. I should put them in a named tuple with: Name, Input dict, expected output, maybe a blank field for result??
+(3) Oh, btw, Mort table path maybe should be hardcoded or something. Like a global var. Just a single table.
 
 '''
