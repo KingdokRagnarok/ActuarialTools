@@ -5,27 +5,39 @@ import datetime
 pd.set_option('display.max_rows', 500)
 
 class Annuity_Factor_Calculator:
+    mortTablePath = '/home/jroth/Documents/Repos/ActuarialTools/Annuity_Factor_Calculator/MortTables/MortTables.parquet'
+    MaxProjectionYears = 121
 
-    def CalcPVF(self, UserInputs_dict:{}, mortTablepath:str):
-        pmt_timing = self.GetPaymentTiming(UserInputs_dict['PaymentFrequency'])
-        mort_df = self.PrepMortality(mortTablepath
-                            , UserInputs_dict['MortalityBeforeBCA']
-                            , UserInputs_dict['MortalityAfterBCA']
-                            , UserInputs_dict['ProjectionMethod']
-                            , UserInputs_dict['PrimaryAnnuitantGender']
-                            , UserInputs_dict['PrimaryAnnuitantAge']
-                            , UserInputs_dict['BeneficiaryGender']
-                            , UserInputs_dict['BeneficiaryAge']
-                            , UserInputs_dict['BenefitCommencementAge']
+    def __init__(self, UserInputs_dict:{}):
+        self.pvf_calc_df = pd.DataFrame({'Time':np.arange(self.MaxProjectionYears)}) #This probably should initialize differently depending on time scale (ie initialize to 121*12 if monthly basis)
+        '''
+        for x in list(UserInputs_dict):
+            self.x = UserInputs_dict[x]
+            print(str(x) + " is " + str(self.x))
+        '''
+        self.__dict__.update(UserInputs_dict)
+
+
+    def CalcPVF(self):
+        pmt_timing = self.GetPaymentTiming(self.PaymentFrequency)
+        mort_df = self.PrepMortality(self.mortTablePath
+                            , self.MortalityBeforeBCA
+                            , self.MortalityAfterBCA
+                            , self.ProjectionMethod
+                            , self.PrimaryAnnuitantGender
+                            , self.PrimaryAnnuitantAge
+                            , self.BeneficiaryGender
+                            , self.BeneficiaryAge
+                            , self.BenefitCommencementAge
                             )
-        calc_df = self.InitializePVFCalc(UserInputs_dict['PrimaryAnnuitantAge'], UserInputs_dict['AnnuityType'], UserInputs_dict['BeneficiaryAge'])
-        calc_df = self.calc_nPx(calc_df, mort_df, UserInputs_dict['PrimaryAnnuitantAge'], mort_type = 'PrimaryAnnuitant')
-        if (UserInputs_dict['AnnuityType']=="J&S") or (UserInputs_dict['AnnuityType']=='JL'):
-                calc_df = self.calc_nPx(calc_df, mort_df, UserInputs_dict['BeneficiaryAge'], mort_type = 'Beneficiary')
+        self.InitializePVFCalc(self.PrimaryAnnuitantAge, self.AnnuityType, self.BeneficiaryAge)
+        self.calc_nPx(mort_df, self.PrimaryAnnuitantAge, mort_type = 'PrimaryAnnuitant')
+        if (self.AnnuityType=="J&S") or (self.AnnuityType=='JL'):
+                self.calc_nPx(mort_df, self.BeneficiaryAge, mort_type = 'Beneficiary')
 
-        calc_df = self.calc_discountFactor(calc_df, UserInputs_dict['DiscountRate'], pmt_timing)
-        calc_df = self.calc_PaymentAmounts(calc_df, UserInputs_dict['BenefitCommencementAge'], UserInputs_dict['AnnualCOLA'], UserInputs_dict['AnnuityType'], UserInputs_dict['SurvivorBenefitPrct'], UserInputs_dict['CertainPeriod(years)'])
-        pvf = self.calculateDiscountedPV(calc_df, UserInputs_dict['AnnuityType'], UserInputs_dict['BenefitCommencementAge'])
+        self.calc_discountFactor(self.DiscountRate, pmt_timing)
+        self.calc_PaymentAmounts(self.BenefitCommencementAge, self.AnnualCOLA, self.AnnuityType, self.SurvivorBenefitPrct, self.CertainPeriod)
+        pvf = self.calculateDiscountedPV(self.AnnuityType, self.BenefitCommencementAge)
         return pvf
 
     @staticmethod
@@ -103,94 +115,78 @@ class Annuity_Factor_Calculator:
 
         return mort_df
 
-    @staticmethod
-    def InitializePVFCalc(PrimaryAnnuitantAge, AnnuityType, BeneficiaryAge):
-        calc_df = pd.DataFrame({'Time':np.arange(121)}) #TODO can just pass in PA Age, Beneficiary Age, and BCA, and calc the # of year to initialize
-        calc_df['PrimaryAnnuitant_Age'] = calc_df['Time'] + PrimaryAnnuitantAge
-        calc_df['MinAge'] = calc_df['PrimaryAnnuitant_Age']
+    def InitializePVFCalc(self, PrimaryAnnuitantAge, AnnuityType, BeneficiaryAge):
+        self.pvf_calc_df['PrimaryAnnuitant_Age'] = self.pvf_calc_df['Time'] + PrimaryAnnuitantAge
+        self.pvf_calc_df['MinAge'] = self.pvf_calc_df['PrimaryAnnuitant_Age']
 
         if (AnnuityType == 'J&S') or (AnnuityType == 'JL'):
-             calc_df['Beneficiary_Age'] = calc_df['Time'] + BeneficiaryAge
-             calc_df['MinAge'] = np.minimum(calc_df['Beneficiary_Age'], calc_df['PrimaryAnnuitant_Age'])
+             self.pvf_calc_df['Beneficiary_Age'] = self.pvf_calc_df['Time'] + BeneficiaryAge
+             self.pvf_calc_df['MinAge'] = np.minimum(self.pvf_calc_df['Beneficiary_Age'], self.pvf_calc_df['PrimaryAnnuitant_Age'])
 
-        calc_df = calc_df[(calc_df['MinAge']<=120)]#TODO reconsider hardcode. 
-        return calc_df
+        self.pvf_calc_df = self.pvf_calc_df[(self.pvf_calc_df['MinAge']<=120)]#TODO reconsider hardcode. 
 
-    @staticmethod
-    def calc_nPx(calc_df, mort_df, Age, mort_type):
+    def calc_nPx(self, mort_df, Age, mort_type):
 
         filtered_mort_df = mort_df[mort_df['MortType']==mort_type][['PriorQx', 'Age']]
         filtered_mort_df = filtered_mort_df.rename(columns ={'PriorQx':mort_type+'_PriorQx', 'Age':mort_type+'_Age'})
 
-        #print(calc_df[mort_type+'_Age'])
-        #print(filtered_mort_df[mort_type+'_Age'])
+        self.pvf_calc_df = self.pvf_calc_df.merge(filtered_mort_df, how = 'left', on = [mort_type+'_Age'])
+        self.pvf_calc_df[mort_type+'_PriorPx'] = 1 - self.pvf_calc_df[mort_type+'_PriorQx']
+        self.pvf_calc_df[mort_type+'_PriorPx'] = self.pvf_calc_df[mort_type+'_PriorPx'].where(self.pvf_calc_df[mort_type+'_Age']!=Age, 1) #necessarily, prior Px to current age is 1 because the ptcp has survived to their current age
+        self.pvf_calc_df[mort_type+'_nPx'] = self.pvf_calc_df[mort_type+'_PriorPx'].cumprod()
 
-        calc_df = calc_df.merge(filtered_mort_df, how = 'left', on = [mort_type+'_Age'])
-        calc_df[mort_type+'_PriorPx'] = 1 - calc_df[mort_type+'_PriorQx']
-        calc_df[mort_type+'_PriorPx'] = calc_df[mort_type+'_PriorPx'].where(calc_df[mort_type+'_Age']!=Age, 1) #necessarily, prior Px to current age is 1 because the ptcp has survived to their current age
-        calc_df[mort_type+'_nPx'] = calc_df[mort_type+'_PriorPx'].cumprod()
+    def calc_discountFactor(self, DiscountRate, PaymentTiming):
+        self.pvf_calc_df['discount_rate'] = DiscountRate #TODO eventually this will merge with an entire dataframe of discount rates (ie a Full Yield Curve, or even just expanded single segments)
+        self.pvf_calc_df['discount_factor'] = (1+self.pvf_calc_df['discount_rate'])**-(PaymentTiming + self.pvf_calc_df['Time'])
 
-        return calc_df
-
-    @staticmethod
-    def calc_discountFactor(calc_df, DiscountRate, PaymentTiming):
-        calc_df['discount_rate'] = DiscountRate #TODO eventually this will merge with an entire dataframe of discount rates (ie a Full Yield Curve, or even just expanded single segments)
-        calc_df['discount_factor'] = (1+calc_df['discount_rate'])**-(PaymentTiming + calc_df['Time'])
-
-        return calc_df
-
-    @staticmethod
-    def calc_PaymentAmounts(calc_df, BenefitCommencementAge, COLA_pct, AnnuityType, SurvivorBenefitPct, CertainPeriod):
+    def calc_PaymentAmounts(self, BenefitCommencementAge, COLA_pct, AnnuityType, SurvivorBenefitPct, CertainPeriod):
         
         #SLA payment - JL payment is the same
-        calc_df['sla_payment'] = 0
-        calc_df['sla_payment'] = calc_df['sla_payment'].where(calc_df['PrimaryAnnuitant_Age']<BenefitCommencementAge, 1)
+        self.pvf_calc_df['sla_payment'] = 0
+        self.pvf_calc_df['sla_payment'] = self.pvf_calc_df['sla_payment'].where(self.pvf_calc_df['PrimaryAnnuitant_Age']<BenefitCommencementAge, 1)
         
         #J&S payment
         if AnnuityType == "J&S":
-            calc_df['jointAndSurvivor_payment'] = calc_df['sla_payment']*SurvivorBenefitPct
+            self.pvf_calc_df['jointAndSurvivor_payment'] = self.pvf_calc_df['sla_payment']*SurvivorBenefitPct
         else:
-            calc_df['jointAndSurvivor_payment'] = 0
+            self.pvf_calc_df['jointAndSurvivor_payment'] = 0
 
         #C&L payment
         if AnnuityType == "C&L":
-            calc_df['certain_payment'] = 0
-            calc_df['certain_payment'] = calc_df['certain_payment'].where((calc_df['PrimaryAnnuitant_Age']<BenefitCommencementAge), 1)
-            calc_df['certain_payment'] = calc_df['certain_payment'].where((calc_df['PrimaryAnnuitant_Age']<BenefitCommencementAge + CertainPeriod), 0)
+            self.pvf_calc_df['certain_payment'] = 0
+            self.pvf_calc_df['certain_payment'] = self.pvf_calc_df['certain_payment'].where((self.pvf_calc_df['PrimaryAnnuitant_Age']<BenefitCommencementAge), 1)
+            self.pvf_calc_df['certain_payment'] = self.pvf_calc_df['certain_payment'].where((self.pvf_calc_df['PrimaryAnnuitant_Age']<BenefitCommencementAge + CertainPeriod), 0)
             #adjust SLA payment
-            calc_df['sla_payment'] = calc_df['sla_payment'].where(calc_df['PrimaryAnnuitant_Age']>=BenefitCommencementAge + CertainPeriod, 0)
+            self.pvf_calc_df['sla_payment'] = self.pvf_calc_df['sla_payment'].where(self.pvf_calc_df['PrimaryAnnuitant_Age']>=BenefitCommencementAge + CertainPeriod, 0)
         else:
-            calc_df['certain_payment'] = 0
+            self.pvf_calc_df['certain_payment'] = 0
         
         #apply COLA
-        calc_df['Time_From_BCA'] = np.maximum(0, calc_df['PrimaryAnnuitant_Age'] - BenefitCommencementAge)
-        calc_df['COLA_Factor'] = (1+COLA_pct)**(calc_df['Time_From_BCA'])
-        calc_df['sla_payment'] = calc_df['sla_payment'] * calc_df['COLA_Factor']
-        calc_df['jointAndSurvivor_payment'] = calc_df['jointAndSurvivor_payment'] * calc_df['COLA_Factor']
-        calc_df['certain_payment'] = calc_df['certain_payment'] * calc_df['COLA_Factor']
+        self.pvf_calc_df['Time_From_BCA'] = np.maximum(0, self.pvf_calc_df['PrimaryAnnuitant_Age'] - BenefitCommencementAge)
+        self.pvf_calc_df['COLA_Factor'] = (1+COLA_pct)**(self.pvf_calc_df['Time_From_BCA'])
+        self.pvf_calc_df['sla_payment'] = self.pvf_calc_df['sla_payment'] * self.pvf_calc_df['COLA_Factor']
+        self.pvf_calc_df['jointAndSurvivor_payment'] = self.pvf_calc_df['jointAndSurvivor_payment'] * self.pvf_calc_df['COLA_Factor']
+        self.pvf_calc_df['certain_payment'] = self.pvf_calc_df['certain_payment'] * self.pvf_calc_df['COLA_Factor']
         
-        return calc_df
-
-    @staticmethod
-    def calculateDiscountedPV(calc_df, AnnuityType, BenefitCommencementAge):
+    def calculateDiscountedPV(self, AnnuityType, BenefitCommencementAge):
         match AnnuityType:
             case "SLA":
-                 calc_df['discounted_payment'] = calc_df['sla_payment'] * calc_df['discount_factor'] * calc_df['PrimaryAnnuitant_nPx']
+                 self.pvf_calc_df['discounted_payment'] = self.pvf_calc_df['sla_payment'] * self.pvf_calc_df['discount_factor'] * self.pvf_calc_df['PrimaryAnnuitant_nPx']
             case "J&S":
-                calc_df['sla_discounted_payment'] = calc_df['sla_payment'] * calc_df['discount_factor'] * calc_df['PrimaryAnnuitant_nPx']
-                calc_df['jointAndSurvivor_discounted_payment'] = calc_df['jointAndSurvivor_payment'] * calc_df['discount_factor'] * calc_df['Beneficiary_nPx']*(1-calc_df['PrimaryAnnuitant_nPx'])
-                calc_df['discounted_payment'] = calc_df['sla_discounted_payment'] + calc_df['jointAndSurvivor_discounted_payment']
+                self.pvf_calc_df['sla_discounted_payment'] = self.pvf_calc_df['sla_payment'] * self.pvf_calc_df['discount_factor'] * self.pvf_calc_df['PrimaryAnnuitant_nPx']
+                self.pvf_calc_df['jointAndSurvivor_discounted_payment'] = self.pvf_calc_df['jointAndSurvivor_payment'] * self.pvf_calc_df['discount_factor'] * self.pvf_calc_df['Beneficiary_nPx']*(1-self.pvf_calc_df['PrimaryAnnuitant_nPx'])
+                self.pvf_calc_df['discounted_payment'] = self.pvf_calc_df['sla_discounted_payment'] + self.pvf_calc_df['jointAndSurvivor_discounted_payment']
             case "C&L":
-                SurvivalToStart = calc_df[calc_df['PrimaryAnnuitant_Age']==BenefitCommencementAge]['PrimaryAnnuitant_nPx'].values[0]
-                calc_df['sla_discounted_payment'] = calc_df['sla_payment'] * calc_df['discount_factor'] * calc_df['PrimaryAnnuitant_nPx']                
-                calc_df['certain_discounted_payment'] = calc_df['certain_payment'] * calc_df['discount_factor']*SurvivalToStart
-                calc_df['discounted_payment'] = calc_df['sla_discounted_payment'] + calc_df['certain_discounted_payment']
+                SurvivalToStart = self.pvf_calc_df[self.pvf_calc_df['PrimaryAnnuitant_Age']==BenefitCommencementAge]['PrimaryAnnuitant_nPx'].values[0]
+                self.pvf_calc_df['sla_discounted_payment'] = self.pvf_calc_df['sla_payment'] * self.pvf_calc_df['discount_factor'] * self.pvf_calc_df['PrimaryAnnuitant_nPx']                
+                self.pvf_calc_df['certain_discounted_payment'] = self.pvf_calc_df['certain_payment'] * self.pvf_calc_df['discount_factor']*SurvivalToStart
+                self.pvf_calc_df['discounted_payment'] = self.pvf_calc_df['sla_discounted_payment'] + self.pvf_calc_df['certain_discounted_payment']
             case "JL":
-                calc_df['discounted_payment'] = calc_df['sla_payment']* calc_df['discount_factor'] * calc_df['PrimaryAnnuitant_nPx']* calc_df['Beneficiary_nPx']
+                self.pvf_calc_df['discounted_payment'] = self.pvf_calc_df['sla_payment']* self.pvf_calc_df['discount_factor'] * self.pvf_calc_df['PrimaryAnnuitant_nPx']* self.pvf_calc_df['Beneficiary_nPx']
 
-        pvf = calc_df['discounted_payment'].sum().round(4) #TODO Parametrize rounding
+        pvf = self.pvf_calc_df['discounted_payment'].sum().round(4) #TODO Parametrize rounding
 
-        calc_df.to_csv('/home/jroth/Documents/Repos/ActuarialTools/Annuity_Factor_Calculator/testFiles/'+str(datetime.datetime.now())+".csv", index=False)
+        #self.pvf_calc_df.to_csv('/home/jroth/Documents/Repos/ActuarialTools/Annuity_Factor_Calculator/testFiles/'+str(datetime.datetime.now())+".csv", index=False)
 
         return pvf
 
