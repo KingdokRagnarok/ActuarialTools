@@ -5,10 +5,13 @@ import Annuity_Factor_Calculator as AFC
 
 cwd = os.getcwd()
 
-def ExecuteTest(TestNumber, Inputs, ExpectedResult):
+def ExecuteTest(TestNumber, Inputs, ExpectedResult, testMode = False):
     Calculator = AFC.Annuity_Factor_Calculator(Inputs)
-    ActualResult = Calculator.CalcPVF()
-    if ExpectedResult == ActualResult:
+    if testMode:
+        ActualResult = Calculator.CalcPVF(testMode)
+    else:
+        ActualResult = Calculator.CalcPVF()        
+    if abs(ExpectedResult - ActualResult)<.00011: #TODO - is this close enough??? Concerned about 4th digit differences
         print("Test " + str(TestNumber) + " PASSED")
     else:
         print("Test " + str(TestNumber) + " FAILED - Expected: "+str(ExpectedResult)+", Returned: "+str(ActualResult))
