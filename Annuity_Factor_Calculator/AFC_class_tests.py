@@ -345,7 +345,7 @@ Test12Inputs = {
     , 'SetbackYearsMale':0 #-10->10
     , 'SetbackYearsFemale':0 #-10->10
 }
-Test12ExpectedResult = 5.3069
+Test12ExpectedResult = 4.2345 #Note JL AnnuityType
 ExecuteTest(12, Test12Inputs, Test12ExpectedResult)
 
 #Test 13: Age = CommAge
@@ -429,7 +429,7 @@ Test15Inputs = {
 Test15ExpectedResult = 3.6838
 ExecuteTest(15, Test15Inputs, Test15ExpectedResult)
 
-#Test 16: RP2006_BlueCol
+#Test 16: RP2000_BlueCol
 Test16Inputs = {
     'DiscountRate':.05 #0-1
     , 'AnnualCOLA':0.0 #0-1
@@ -443,8 +443,8 @@ Test16Inputs = {
     , 'BeneficiaryAge':40 #20-120
     , 'BeneficiaryGender':'M' #M, F
     , 'ValuationYear':2025 #1990-2030
-    , 'MortalityBeforeBCA':"RP2006_BlueCol_Employee" #Pri2012_Total_Employee
-    , 'MortalityAfterBCA':"RP2006_BlueCol_HealthyAnnuit" #Pri2012_Total_Retiree
+    , 'MortalityBeforeBCA':"RP2000_BlueCol" #Pri2012_Total_Employee
+    , 'MortalityAfterBCA':"RP2000_BlueCol" #Pri2012_Total_Retiree
     , 'ProjectionMethod':"None" #None, Static, Generational
     , 'ProjectionScale':"AA" #
     , 'StaticProjectionYears':0 #0-50
@@ -453,7 +453,7 @@ Test16Inputs = {
     , 'SetbackYearsMale':0 #-10->10
     , 'SetbackYearsFemale':0 #-10->10
 }
-Test16ExpectedResult = 3.9626
+Test16ExpectedResult = 4.7883
 ExecuteTest(16, Test16Inputs, Test16ExpectedResult)
 
 #Test 17: RP2014
@@ -483,7 +483,7 @@ Test17Inputs = {
 Test17ExpectedResult = 4.4245
 ExecuteTest(17, Test17Inputs, Test17ExpectedResult)
 
-#Test 18: RP 2006, AA, Static
+#Test 18: RP 2000, AA, Static
 Test18Inputs = {
     'DiscountRate':.05 #0-1
     , 'AnnualCOLA':0.0 #0-1
@@ -497,17 +497,17 @@ Test18Inputs = {
     , 'BeneficiaryAge':40 #20-120
     , 'BeneficiaryGender':'M' #M, F
     , 'ValuationYear':2025 #1990-2030
-    , 'MortalityBeforeBCA':"RPH2006_Employee" #Pri2012_Total_Employee
-    , 'MortalityAfterBCA':"RPH2006_HlthyAnn" #Pri2012_Total_Retiree
+    , 'MortalityBeforeBCA':"RP2000_Employee" #Pri2012_Total_Employee
+    , 'MortalityAfterBCA':"RP2000_HealthyAnnuit" #Pri2012_Total_Retiree
     , 'ProjectionMethod':"Static" #None, Static, Generational
     , 'ProjectionScale':"AA" #
-    , 'StaticProjectionYears':2025-2006 #0-50
+    , 'StaticProjectionYears':2025-2000 #0-50
     , 'BlendMortalityRates':False #TRUE, FALSE
     , 'BlendingMalePercentage':.5 #0-1
     , 'SetbackYearsMale':0 #-10->10
     , 'SetbackYearsFemale':0 #-10->10
 }
-Test18ExpectedResult = 4.7633
+Test18ExpectedResult = 4.8553
 ExecuteTest(18, Test18Inputs, Test18ExpectedResult)
 
 #Test 19: RP 2014, MP2021, Generational
