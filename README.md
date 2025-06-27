@@ -63,6 +63,7 @@ The following features are planned additions:
 * Additional functions (nPx, nQx, endowment factors)
 * Calculation Validation Output
 * User-Defined Mortality Tables
+*   Mort table validator
 
 #### Comments:
 The initial version of this tool is intended to replicate most of the capabilities of the SOA Annuity Factor Calculator (https://afc.soa.org/).
