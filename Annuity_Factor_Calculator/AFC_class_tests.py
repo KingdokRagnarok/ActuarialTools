@@ -16,7 +16,7 @@ def ExecuteTest(TestNumber, Inputs, ExpectedResult, testMode = False):
     pctError = abs((ExpectedResult - ActualResult)/ExpectedResult)
     if pctError<maxPctError: 
         if ExpectedResult == ActualResult:
-            resultString = "Test" + str(TestNumber) + "PASSED: EXACT"
+            resultString = "Test " + str(TestNumber) + " PASSED: EXACT"
         else:
             resultString = "Test " + str(TestNumber) + " PASSED - Expected: "+str(ExpectedResult)+", Returned: "+str(ActualResult) +", Percent Error: " + str(pctError)
     else:
@@ -453,7 +453,7 @@ Test16Inputs = {
     , 'SetbackYearsMale':0 #-10->10
     , 'SetbackYearsFemale':0 #-10->10
 }
-Test16ExpectedResult = 4.7883
+Test16ExpectedResult = 3.7883
 ExecuteTest(16, Test16Inputs, Test16ExpectedResult)
 
 #Test 17: RP2014
@@ -501,13 +501,13 @@ Test18Inputs = {
     , 'MortalityAfterBCA':"RP2000_HealthyAnnuit" #Pri2012_Total_Retiree
     , 'ProjectionMethod':"Static" #None, Static, Generational
     , 'ProjectionScale':"AA" #
-    , 'StaticProjectionYears':2025-2000 #0-50
+    , 'StaticProjectionYears':2025-2000 #NOTE inconsistency with SOA Calculator - SOA calculator assumes 25 static projection years from the different between base year and val year
     , 'BlendMortalityRates':False #TRUE, FALSE
     , 'BlendingMalePercentage':.5 #0-1
     , 'SetbackYearsMale':0 #-10->10
     , 'SetbackYearsFemale':0 #-10->10
 }
-Test18ExpectedResult = 4.8553
+Test18ExpectedResult = 4.4683
 ExecuteTest(18, Test18Inputs, Test18ExpectedResult)
 
 #Test 19: RP 2014, MP2021, Generational
@@ -548,8 +548,8 @@ Test20Inputs = {
     , 'BenefitCommencementAge':65 #50-120
     , 'PrimaryAnnuitantAge':45 #20-120
     , 'PrimaryAnnuitantGender':"M" #M, F
-    , 'BeneficiaryAge':40 #20-120
-    , 'BeneficiaryGender':'F' #M, F
+    , 'BeneficiaryAge':40 #SB 40
+    , 'BeneficiaryGender':'F' #SB F
     , 'ValuationYear':2025 #1990-2030
     , 'MortalityBeforeBCA':"Pri2012_Total_Employee" #Pri2012_Total_Employee
     , 'MortalityAfterBCA':"Pri2012_Total_Retiree" #Pri2012_Total_Retiree
@@ -672,7 +672,7 @@ Test24Inputs = {
 Test24ExpectedResult = 5.1344
 ExecuteTest(24, Test24Inputs, Test24ExpectedResult)
 
-#Test 25: F Set Fwd
+#Test 25: F Set Fwd - Note JL annuity type
 Test25Inputs = {
     'DiscountRate':.05 #0-1
     , 'AnnualCOLA':0.0 #0-1
@@ -696,9 +696,8 @@ Test25Inputs = {
     , 'SetbackYearsMale':0 #-10->10
     , 'SetbackYearsFemale':-3 #-10->10
 }
-Test25ExpectedResult = 4.2953
+Test25ExpectedResult = 3.7647
 ExecuteTest(25, Test25Inputs, Test25ExpectedResult)
-
 
 '''
 
@@ -716,5 +715,7 @@ COLA with Annual EOY
 COLA with mthly EOM
 J&S with EOY/EOM
 
+SETBACK BEFORE OR AFTER MORT PROJ? SPECIFICALLY FOR GENERATIONSL PROJECTION
+Need to test Setback/Blend with mort proj.
 
 '''
