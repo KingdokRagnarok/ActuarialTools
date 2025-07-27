@@ -3,9 +3,6 @@ import numpy as np
 import datetime
 import os
 
-import warnings
-warnings.filterwarnings("ignore") #TODO REMOVE
-
 pd.set_option('display.max_rows', 500)
 
 class Annuity_Factor_Calculator:
