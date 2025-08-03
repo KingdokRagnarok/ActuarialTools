@@ -1,7 +1,7 @@
 # ActuarialTools
 Actuarial tools developed by Joseph Roth (KingdokRagnarok).
 
-Date: 2025-06-20
+Date: 2025-08-03
 
 ## Repository Purpose:
 
@@ -21,7 +21,7 @@ tbd
 
 ### Annuity Factor Calculator:
 
-Updated Date: 2025-06-20
+Updated Date: 2025-08-03
 
 #### Purpose: 
 A python-based annuity factor calculator which can be installed via PIP. It should, in order of development priority, (a) calculate Annuity PVFs in a method similar to other PVF Calculators, (b) include calculation checking/audit trail capabilities, and (c) have a flexible interface/API which permits advanced users to integrate it into their own applications.
@@ -48,20 +48,22 @@ The following features analogous to the SOA Annuity Factor Calculator Calculator
 * Primary Annuitant Gender (Operational)
 * Beneficiary Age (Operational)
 * Beneficiary gender (Operational)
-* Valuation Year (applicable to Mortality Projection) (NOT operational)
-* Mortality Before and After Benefit Commencement Age (operational)
-* Projection Method (Generational, Static, None) (NOT operational)
-* Projection Scale (NOT operational)
-* Static Projection # of years to project (NOT operational)
-* Blend Mortality Rates + Percentage of Blend (NOT operational)
-* Setback years (each gender separate) (NOT operational)
+* Valuation Year (applicable to Mortality Projection) (Operational)
+* Mortality Before and After Benefit Commencement Age (Operational)
+* Projection Method (Generational, Static, None) (Operational)
+* Projection Scale (Operational)
+* Static Projection # of years to project (Operational)
+* Blend Mortality Rates + Percentage of Blend (Operational)
+* Setback years (each gender separate) (Operational)
+
+The following extra features are Operational:
+* Calculation Validation Output - By running the calculator in test mode, a csv with the calculation dataframe is generated).
 
 The following features are planned additions:
 * Separate Beneficiary Benefit Commencent Age (for switching mortality tables)
 * Full Yield Curve
 * Parallelized calculation of multiple PVFs
 * Additional functions (nPx, nQx, endowment factors)
-* Calculation Validation Output
 * User-Defined Mortality Tables
 *   Mort table validator
 
@@ -69,8 +71,8 @@ The following features are planned additions:
 The initial version of this tool is intended to replicate most of the capabilities of the SOA Annuity Factor Calculator (https://afc.soa.org/).
 It will likely include all the features that the SOA calculator has, and it is intended to include some additional features (flexible discount rate inputs, alternate Beneficiary Mortality, and any other features I feel like adding). For now, the only output is a PVF, but I may add add some alternate outputs (nPx, nQx, discount factors, validation tools, etc). The PVF calc is contained within the Annuity_Factor_Calculator file. 
 
-The UtilityCode.ipynb has blocks of code for creating certain files needed for the PVF calculator: MortTables.parquet, and userInputs.txt
-Long-term, I anticipate MortTables will continue to be held in a parquet file. Another one will be needed for Projection Scales, and another for interest rate arrays - thought I do need to figure out how the input for that will work. The currently used inputs string will probably be enhanced by a UI for passing inputs from the user, but until then it is convenient for me to directly modify a Python Dict and save it to a .txt file.
+The UtilityCode.ipynb has blocks of code for creating certain files needed for the PVF calculator: MortTables.parquet, MortProjectionScale_1d.parquet, MortProjectionScale_2d.parquet, and userInputs.txt
+Another parquet may be needed for interest rate arrays - thought I do need to figure out how the input for that will work, since the user may be uploading those. The currently used inputs string will probably be enhanced by a UI for passing inputs from the user, but until then it is convenient for me to directly modify a Python Dict and save it to a .txt file.
 
 My initital intent was to use the SOA AFC Calculator to exactly match my calculations. However, because I am not intending to exactly match the calculator in the long term, my testing process now defines a maximimum error from the SOA AFC results. I intend to use the SOA Calculator to get directionally close to the correct calculation, but to use my own actuarial knowledge to confirm the correctness of the calculations.
-As of the current date, my own actuarial knowledge indicates that not all intended features of the calculator have been built, and for some of those that have been built (specifically some Payment Frequency Options) I cannot confirm why they do not match the SOA calculator. Therefore, as of the current date, I would not recommend using this tool. 
+As of the current date, my own actuarial knowledge indicates that not all intended features of the calculator have been built, and for some of those that have been built (specifically some Payment Frequency Options) I cannot confirm why they do not match the SOA calculator. Therefore, as of the current date, I would not recommend using this tool for any purpose other than 
