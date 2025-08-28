@@ -1,7 +1,7 @@
 # ActuarialTools
 Actuarial tools developed by Joseph Roth (KingdokRagnarok).
 
-Date: 2025-08-03
+Date: 2025-08-28
 
 ## Repository Purpose:
 
@@ -17,7 +17,7 @@ Currently Available Tools:
 * Annuity Factor Calculator
 
 Planned Tools:
-tbd
+* Present Value Factor calculator - More comprehensive modelling framework. Currently discussion only. 
 
 ### Annuity Factor Calculator:
 
