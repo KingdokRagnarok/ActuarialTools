@@ -4,12 +4,239 @@ import datetime
 import os
 
 pd.set_option('display.max_rows', 500)
+pd.set_option('future.no_silent_downcasting', True)
 
-class Annuity_Factor_Calculator:
+print("Annuity_Factor_Calculator is loaded")
+print(__file__)
+
+class MortTableGenerator:
     mortTablePath = os.getcwd() + '/Annuity_Factor_Calculator/MortTables/MortTables.parquet'
     mortInfoPath = os.getcwd() + '/Annuity_Factor_Calculator/MortTables/MortTableInfo.parquet'
     ProjScalePath = os.getcwd() + '/Annuity_Factor_Calculator/ProjectionScales'
 
+    def CreateRawMortTable(self, MortalityTableName, StartAge, EndAge, Sex, setbackYears):
+        mort_df = self.AccessMortDatabase(MortalityTableName)
+        mort_df = self.filterMort(mort_df, StartAge, EndAge, Sex, setbackYears)
+
+        mort_df = mort_df.drop(columns = {'Sex'})
+
+        return mort_df
+
+    def AccessMortDatabase(self, MortalityTableName):
+        mort_df = pd.read_parquet(self.mortTablePath
+                            , columns=['Sex', 'Age', 'Qx']
+                            , filters = [('MortalityTableName', '==', MortalityTableName)])
+        
+        return mort_df
+        
+    def filterMort(self, mort_df, startAge, endAge, Sex, setbackYears):
+
+        mort_df['Age'] = mort_df['Age'] + setbackYears
+
+        mort_df = mort_df[(mort_df['Sex']==Sex)
+                            &(mort_df['Age']>=startAge)
+                            &(mort_df['Age']<endAge)
+                            ]
+        
+        return mort_df
+
+    @staticmethod
+    def BlendMortality(mort_df_m, blend_pct_m, mort_df_f):
+
+        blend_pct_f = 1 -blend_pct_m
+        
+        mort_df_m['blend_rate_1'] = blend_pct_m
+        mort_df_m = mort_df_m.rename(columns = {'Qx':'Qx_1'})
+
+        mort_df_f['blend_rate_2'] = blend_pct_f
+        mort_df_f = mort_df_f.rename(columns = {'Qx':'Qx_2'})
+        
+        mort_df = mort_df_m.merge(mort_df_f, how = 'left', on = 'Age')
+        mort_df['Qx'] = (mort_df['Qx_1'] * mort_df['blend_rate_1']) + (mort_df['Qx_2'] * (mort_df['blend_rate_2']))
+
+        mort_df = mort_df.drop(columns = {'Qx_1', 'blend_rate_1', 'Qx_2', 'blend_rate_2'})
+
+        return mort_df
+
+    def AccessOneDimProjectionScale(self, mortScaleName):
+        mort_proj_rates_df = pd.read_parquet(self.ProjScalePath + '/MortProjectionScale_1d.parquet'
+                                    , columns=['MortScaleName', 'Gender', 'Age', 'ImprovementRate']
+                                    , filters = [[('MortScaleName', '==', mortScaleName)]])
+        mort_proj_rates_df = mort_proj_rates_df.rename(columns ={'Gender':'Sex'})
+
+        #TODO - theoretically I guess you could access a 2D table as if it were 1D. If so, logic for that could go here
+
+        return mort_proj_rates_df
+
+    def AccessTwoDimProjectionScale(self, mortScaleName):
+        mort_proj_rates_df = pd.read_parquet(self.ProjScalePath + '/MortProjectionScale_2d.parquet'
+                    , columns=['MortScaleName', 'Gender', 'Age', 'ValYear', 'ImprovementRate']
+                    , filters = [[('MortScaleName', '==', mortScaleName)], [('MortScaleName', '==', mortScaleName)]])    
+        mort_proj_rates_df = mort_proj_rates_df.rename(columns ={'Gender':'Sex'})
+
+        return mort_proj_rates_df
+
+    def filterOneDimProjectionScale(self, projectionScaleDF, StartAge, EndAge, Sex, setbackYears):
+        projectionScaleDF['Age'] = projectionScaleDF['Age'] + setbackYears
+
+        projectionScaleDF = projectionScaleDF[(projectionScaleDF['Sex']==Sex)
+                            &(projectionScaleDF['Age']>=StartAge)
+                            &(projectionScaleDF['Age']<EndAge)
+                            ]
+        
+        return projectionScaleDF
+
+    def filterTwoDimProjectionScale(self, projectionScaleDF, StartAge, EndAge, Sex, setbackYears, BaseYear, EndYear):
+        projectionScaleDF['Age'] = projectionScaleDF['Age'] + setbackYears
+
+        projectionScaleDF = projectionScaleDF[(projectionScaleDF['Sex']==Sex)
+                            &(projectionScaleDF['Age']>=StartAge)
+                            &(projectionScaleDF['Age']<EndAge)
+                            &(projectionScaleDF['ValYear']>BaseYear)
+                            &(projectionScaleDF['ValYear']<=EndYear)
+                            ]
+        
+        return projectionScaleDF
+
+    def createRawMortProjScale(self, ProjectionMethod, ProjectionScaleName, StartAge, EndAge, Sex, setbackYears, StartValYear, numberOfYearsToProject):
+        match ProjectionMethod:
+            case 'None':
+                mort_proj_rates = None
+            case 'Static':
+                mort_proj_rates = self.AccessOneDimProjectionScale(ProjectionScaleName)
+                mort_proj_rates = self.filterOneDimProjectionScale(mort_proj_rates, StartAge, EndAge, Sex, setbackYears)               
+            case 'Generational':
+                mort_proj_rates = self.AccessTwoDimProjectionScale(ProjectionScaleName)
+                mort_proj_rates = self.filterTwoDimProjectionScale(mort_proj_rates, StartAge, EndAge, Sex, setbackYears, StartValYear, StartValYear + numberOfYearsToProject)
+        
+        return mort_proj_rates
+
+    @staticmethod
+    def BlendOneDimMortProj(proj_df_m, blend_pct_m, proj_df_f):
+        blend_pct_f = 1 -blend_pct_m
+        
+        proj_df_m['blend_rate_1'] = blend_pct_m
+        proj_df_m = proj_df_m.rename(columns = {'ImprovementRate':'ImprovementRate_1'})
+
+        proj_df_f['blend_rate_2'] = blend_pct_f
+        proj_df_f = proj_df_f.rename(columns = {'ImprovementRate':'ImprovementRate_2'})
+        
+        mort_proj_rates_df = proj_df_m.merge(proj_df_f, how = 'left', on = 'Age')
+        mort_proj_rates_df['ImprovementRate'] = (mort_proj_rates_df['ImprovementRate_1'] * mort_proj_rates_df['blend_rate_1']) + (mort_proj_rates_df['ImprovementRate_2'] * (mort_proj_rates_df['blend_rate_2']))
+
+        mort_proj_rates_df = mort_proj_rates_df.drop(columns = {'ImprovementRate_1', 'blend_rate_1', 'ImprovementRate_2', 'blend_rate_2'})
+        
+        return mort_proj_rates_df
+
+    @staticmethod
+    def BlendTwoDimMortProj(proj_df_m, blend_pct_m, proj_df_f):
+
+        blend_pct_f = 1 -blend_pct_m
+        
+        proj_df_m['blend_rate_1'] = blend_pct_m
+        proj_df_m = proj_df_m.rename(columns = {'ImprovementRate':'ImprovementRate_1'})
+
+        proj_df_f['blend_rate_2'] = blend_pct_f
+        proj_df_f = proj_df_f.rename(columns = {'ImprovementRate':'ImprovementRate_2'})
+        
+        mort_proj_rates_df = proj_df_m.merge(proj_df_f, how = 'left', on = ['Age', 'ValYear'])
+        mort_proj_rates_df['ImprovementRate'] = (mort_proj_rates_df['ImprovementRate_1'] * mort_proj_rates_df['blend_rate_1']) + (mort_proj_rates_df['ImprovementRate_2'] * (mort_proj_rates_df['blend_rate_2']))
+
+        mort_proj_rates_df = mort_proj_rates_df.drop(columns = {'ImprovementRate_1', 'blend_rate_1', 'ImprovementRate_2', 'blend_rate_2'})
+        
+        return mort_proj_rates_df
+
+    def createMortProjScale(self, ProjectionMethod, ProjectionScaleName, StartAge, EndAge, Sex, setbackYears, blend_mortality, blend_pct_m, alt_setBackYears, StartValYear, numberOfYearsToProject):
+        
+        mort_proj_rates = self.createRawMortProjScale(ProjectionMethod, ProjectionScaleName, StartAge, EndAge, Sex, setbackYears, StartValYear, numberOfYearsToProject)
+
+        if blend_mortality:
+            if Sex == 'M':
+                alt_sex_mort_proj_rates = self.createRawMortProjScale(ProjectionMethod, ProjectionScaleName, StartAge, EndAge, 'F', alt_setBackYears, StartValYear, numberOfYearsToProject)
+                mort_proj_rates = self.BlendOneDimMortProj(mort_proj_rates, blend_pct_m, alt_sex_mort_proj_rates)
+            elif Sex == 'F':
+                alt_sex_mort_proj_rates = self.createRawMortProjScale(ProjectionMethod, ProjectionScaleName, StartAge, EndAge, 'M', alt_setBackYears, StartValYear, numberOfYearsToProject)
+                mort_proj_rates = self.BlendTwoDimMortProj(alt_sex_mort_proj_rates, blend_pct_m, mort_proj_rates)
+            else:
+                print('invalid sex for mortality blend - returning unblended mortality')
+
+        return mort_proj_rates      
+
+    def CreateUnprojectedMortTable(self, MortalityTableName, StartAge, EndAge, Sex, setbackYears, blend_mortality, blend_pct_m, alt_setBackYears):
+
+        mort_df = self.CreateRawMortTable(MortalityTableName, StartAge, EndAge, Sex, setbackYears)
+
+        if blend_mortality:
+            if Sex == 'M':
+                alt_sex_mort_df = self.CreateRawMortTable(MortalityTableName, StartAge, EndAge, 'F', alt_setBackYears)
+                mort_df = self.BlendMortality(mort_df, blend_pct_m, alt_sex_mort_df)
+            elif Sex == 'F':
+                alt_sex_mort_df = self.CreateRawMortTable(MortalityTableName, StartAge, EndAge, 'M', alt_setBackYears)
+                mort_df = self.BlendMortality(alt_sex_mort_df, blend_pct_m, mort_df)
+            else:
+                print('invalid sex for mortality blend - returning unblended mortality')
+
+        return mort_df
+
+    def CalculateOneDimMortalityImprovementFactor(self, baseMortProj_df, numberOfYearsToProject):
+        baseMortProj_df['AnnualMortalityImprovementFactor'] = 1 - baseMortProj_df['ImprovementRate']
+        baseMortProj_df['TotalMortalityImprovementFactor'] = baseMortProj_df['AnnualMortalityImprovementFactor'] ** numberOfYearsToProject
+
+        return baseMortProj_df
+
+    def CalculateTwoDimMortalityImprovementFactor(self, baseMortProj_df, EndYear, CurrentAge, ValuationYear):
+
+        baseMortProj_df['AnnualMortalityImprovementFactor'] = 1 - baseMortProj_df['ImprovementRate']
+
+        mortProjMaxYear = np.max(baseMortProj_df['ValYear'])
+        
+        if mortProjMaxYear < EndYear:
+            yearsToRepeat = range(mortProjMaxYear, EndYear+1)
+            baseMortProj_df['Repeat'] = 0
+            baseMortProj_df['Repeat'] = baseMortProj_df['Repeat'].where(baseMortProj_df['ValYear']<mortProjMaxYear, 1)
+            MortProjRepeats_df = pd.DataFrame({'ValYear':yearsToRepeat})
+            MortProjRepeats_df['Repeat'] = 1
+            baseMortProj_df = baseMortProj_df.merge(MortProjRepeats_df, how = 'left', on = 'Repeat')
+            baseMortProj_df['ValYear'] = baseMortProj_df['ValYear_x'].where(baseMortProj_df['ValYear_x']<mortProjMaxYear, baseMortProj_df['ValYear_y'])
+
+            baseMortProj_df = baseMortProj_df.drop(columns = {'Repeat', 'ValYear_x', 'ValYear_y'})
+
+            #The year to project to is different for each age. If age X today, project age [X] Qx to [Val Year], but project age [X + 1] Qx to [Val Year + 1]
+            baseMortProj_df['MaxProjYear_thisAge'] = baseMortProj_df['Age'] - CurrentAge + ValuationYear
+            baseMortProj_df = baseMortProj_df[baseMortProj_df['ValYear']<= baseMortProj_df['MaxProjYear_thisAge']]
+
+            #groupby product - return Sex, Age, Annual improvement Factor, rename the aggregated column to 'TotalMortalityImprovementFactor'
+            baseMortProj_df = baseMortProj_df[['Age', 'AnnualMortalityImprovementFactor']].groupby(['Age']).prod().reset_index().rename(columns = {'AnnualMortalityImprovementFactor':'TotalMortalityImprovementFactor'})
+
+            return baseMortProj_df
+
+    @staticmethod
+    def MortProj(baseMort_df, mortProj_df):
+        mort_df = baseMort_df.merge(mortProj_df, how = 'left', on = 'Age')
+        mort_df['Qx'] = mort_df['Qx'] * mort_df['TotalMortalityImprovementFactor']
+        
+        return mort_df[['Age', 'Qx']]
+
+    def CreateMortTable(self, MortalityTableName, StartAge, EndAge, Sex, setbackYears, blend_mortality, blend_pct_m, alt_setBackYears, ProjectionMethod, ProjectionScaleName, StartValYear, numberOfYearsToProject, CurrentAge, ValuationYear):
+        baseMort_df = self.CreateUnprojectedMortTable(MortalityTableName, StartAge, EndAge, Sex, setbackYears, blend_mortality, blend_pct_m, alt_setBackYears)
+
+        match ProjectionMethod:
+            case 'None':
+                mort_df = baseMort_df
+            case 'Static':
+                baseMortProj_df = self.createMortProjScale(ProjectionMethod, ProjectionScaleName, StartAge, EndAge, Sex, setbackYears, blend_mortality, blend_pct_m, alt_setBackYears, StartValYear, numberOfYearsToProject)
+                mortProj_df = self.CalculateOneDimMortalityImprovementFactor(baseMortProj_df, numberOfYearsToProject)
+                mort_df = self.MortProj(baseMort_df, mortProj_df)
+            case 'Generational':
+                baseMortProj_df = self.createMortProjScale(ProjectionMethod, ProjectionScaleName, StartAge, EndAge, Sex, setbackYears, blend_mortality, blend_pct_m, alt_setBackYears, StartValYear, numberOfYearsToProject)
+                mortProj_df = self.CalculateTwoDimMortalityImprovementFactor(baseMortProj_df, StartValYear + numberOfYearsToProject, CurrentAge, ValuationYear)
+                mort_df = self.MortProj(baseMort_df, mortProj_df)
+                
+        return mort_df
+
+class Annuity_Factor_Calculator:
+    mortInfoPath = os.getcwd() + '/Annuity_Factor_Calculator/MortTables/MortTableInfo.parquet'
+    
     MaxProjectionAge = 120
     intermediateRoundingDigits = 6
     finalRoundingDigits = 4
@@ -18,11 +245,8 @@ class Annuity_Factor_Calculator:
         self.__dict__.update(UserInputs_dict)
         self.SetPaymentFrequency()
         self.initializeCalcDF()
-        self.initializeMortDF()
-        self.initializeMortProjDF()
         self.initializeDiscountRatesDF()
         
-
     def SetPaymentFrequency(self):
         match self.PaymentFrequency:
             case 'ABOY':
@@ -38,249 +262,66 @@ class Annuity_Factor_Calculator:
                 self.pmt_timing_within_period = 1
                 self.periods_per_year  = 12
             case 'MAPPX':
-                self.pmt_timing_within_period = 0 #TODO - considering whether this should be 11/24???
+                self.pmt_timing_within_period = 0 #Not 11/24 since it is an after-the-fact adjustment
                 self.periods_per_year  = 1
             case _:
                 print("INVALID INPUT")
 
     def initializeCalcDF(self):
-        years_to_project = max(self.MaxProjectionAge - self.PrimaryAnnuitantAge, self.MaxProjectionAge - self.BeneficiaryAge)
+        self.includeBeneficiary = (self.AnnuityType == 'J&S' or self.AnnuityType == 'JL')
+
+        if (self.includeBeneficiary):
+            years_to_project = max(self.MaxProjectionAge - self.PrimaryAnnuitantAge, self.MaxProjectionAge - self.BeneficiaryAge)
+        else:
+            years_to_project = self.MaxProjectionAge - self.PrimaryAnnuitantAge
         periods_to_project = years_to_project * self.periods_per_year
         self.pvf_calc_df = pd.DataFrame({'Time_Period_Begin':np.arange(periods_to_project)})
         self.pvf_calc_df['Year'] = self.pvf_calc_df['Time_Period_Begin'] //self.periods_per_year
         self.pvf_calc_df['period_in_year'] = self.pvf_calc_df['Time_Period_Begin'].mod(self.periods_per_year)
 
-
-    @staticmethod
-    def filterBaseMortality(base_mort_df, Age, BCA, Gender, MortalityBeforeBCA, MortalityAfterBCA, MaxProjectionAge, setbackYears):
-
-            PreRetMort_df = base_mort_df[(base_mort_df['MortalityTableName'] == MortalityBeforeBCA)
-                            &(base_mort_df['Sex']==Gender)
-                            &(base_mort_df['Age']>=Age)
-                            &(base_mort_df['Age']<BCA + setbackYears)
-                            ]
-            
-            PostRetMort_df = base_mort_df[(base_mort_df['MortalityTableName'] == MortalityAfterBCA)
-                            &(base_mort_df['Sex']==Gender)
-                            &(base_mort_df['Age']>=BCA + setbackYears)
-                            &(base_mort_df['Age']<=MaxProjectionAge)] 
-            
-
-            BaseMort_df = pd.concat([PreRetMort_df, PostRetMort_df])
-            
-            return BaseMort_df
-
-    def initializeMortDF(self):
-    
-        #Get Mortality Tables
-        base_mort_df = pd.read_parquet(self.mortTablePath
-                            , columns=['MortalityTableName', 'Sex', 'Age', 'Qx']
-                            , filters = [[('MortalityTableName', '==', self.MortalityBeforeBCA)], [('MortalityTableName', '==', self.MortalityAfterBCA)]]) 
-        #setback/forward
-        base_mort_df['Age'] = base_mort_df['Age'].where(base_mort_df['Sex']=='F', base_mort_df['Age'] + self.SetbackYearsMale )
-        base_mort_df['Age'] = base_mort_df['Age'].where(base_mort_df['Sex']=='M', base_mort_df['Age'] + self.SetbackYearsFemale )
-
-        #blend rates
-        if self.BlendMortalityRates == True:
-            base_mort_df = self.BlendMortality(base_mort_df)
-        
-        if self.PrimaryAnnuitantGender == 'M':
-            SetbackYears = self.SetbackYearsMale
-        elif self.PrimaryAnnuitantGender == 'F':
-            SetbackYears = self.SetbackYearsFemale
-        else:
-            print("invalid gender for filterBaseMortality") 
-
-        PrimaryAnnuitant_mort_df = self.filterBaseMortality(base_mort_df, self.PrimaryAnnuitantAge, self.BenefitCommencementAge, self.PrimaryAnnuitantGender, self.MortalityBeforeBCA, self.MortalityAfterBCA, self.MaxProjectionAge, SetbackYears)
-        PrimaryAnnuitant_mort_df['MortType'] = 'PrimaryAnnuitant'
-
-        if (self.AnnuityType == 'J&S' ) or (self.AnnuityType == 'JL'):
-                    #determine whether Beneficiary table will be the same as PA table - if age and gender is the same
-            BeneficiaryTable_Is_PrimaryTable = False
-            if (self.PrimaryAnnuitantGender == self.BeneficiaryGender) and (self.PrimaryAnnuitantAge == self.BeneficiaryAge):
-                BeneficiaryTable_Is_PrimaryTable = True
-
-            if BeneficiaryTable_Is_PrimaryTable:
-                Beneficiary_mort_df = PrimaryAnnuitant_mort_df.copy()
-            else:
-                if self.BeneficiaryGender == 'M':
-                    SetbackYears = self.SetbackYearsMale
-                elif self.BeneficiaryGender == 'F':
-                    SetbackYears = self.SetbackYearsFemale
-                else:
-                    print("invalid gender for filterBaseMortality") 
-                Beneficiary_mort_df = self.filterBaseMortality(base_mort_df, self.BeneficiaryAge, self.BenefitCommencementAge, self.BeneficiaryGender, self.MortalityBeforeBCA, self.MortalityAfterBCA, self.MaxProjectionAge, SetbackYears)
-            
-            Beneficiary_mort_df['MortType'] = 'Beneficiary'
-            self.base_mort_df = pd.concat([PrimaryAnnuitant_mort_df, Beneficiary_mort_df])
-        else:
-            self.base_mort_df = PrimaryAnnuitant_mort_df
-
-
-        
-
-    def setMortBaseYears(self):
-        mortTableInfo = pd.read_parquet(self.mortInfoPath
-                            , columns=['MortalityTableName', 'BaseYear']
-                            , filters = [[('MortalityTableName', '==', self.MortalityBeforeBCA)], [('MortalityTableName', '==', self.MortalityAfterBCA)]]) 
-        
-        self.PreBCABaseYear = mortTableInfo[mortTableInfo['MortalityTableName']==self.MortalityBeforeBCA]['BaseYear'].values[0]
-        self.PostBCABaseYear = mortTableInfo[mortTableInfo['MortalityTableName']==self.MortalityAfterBCA]['BaseYear'].values[0]
-
-    def initializeMortProjDF(self):
-        
-        match self.ProjectionMethod:
-            case 'None':
-                pass
-            case 'Static':
-                self.mort_proj_rates_df = pd.read_parquet(self.ProjScalePath + '/MortProjectionScale_1d.parquet'
-                                    , columns=['MortScaleName', 'Gender', 'Age', 'ImprovementRate']
-                                    , filters = [[('MortScaleName', '==', self.ProjectionScale)], [('MortScaleName', '==', self.ProjectionScale)]])
-                self.mort_proj_rates_df = self.mort_proj_rates_df.rename(columns ={'Gender':'Sex'})
-                #setback/forward
-                self.mort_proj_rates_df['Age'] = self.mort_proj_rates_df['Age'].where(self.mort_proj_rates_df['Sex']=='F', self.mort_proj_rates_df['Age'] + self.SetbackYearsMale )
-                self.mort_proj_rates_df['Age'] = self.mort_proj_rates_df['Age'].where(self.mort_proj_rates_df['Sex']=='M', self.mort_proj_rates_df['Age'] + self.SetbackYearsFemale )                           
-            case 'Generational':
-                self.mort_proj_rates_df = pd.read_parquet(self.ProjScalePath + '/MortProjectionScale_2d.parquet'
-                    , columns=['MortScaleName', 'Gender', 'Age', 'ValYear', 'ImprovementRate']
-                    , filters = [[('MortScaleName', '==', self.ProjectionScale)], [('MortScaleName', '==', self.ProjectionScale)]])    
-                self.mort_proj_rates_df = self.mort_proj_rates_df.rename(columns ={'Gender':'Sex'})
-                
-                #setback/forward
-                self.mort_proj_rates_df['Age'] = self.mort_proj_rates_df['Age'].where(self.mort_proj_rates_df['Sex']=='F', self.mort_proj_rates_df['Age'] + self.SetbackYearsMale )
-                self.mort_proj_rates_df['Age'] = self.mort_proj_rates_df['Age'].where(self.mort_proj_rates_df['Sex']=='M', self.mort_proj_rates_df['Age'] + self.SetbackYearsFemale ) 
-
-                #TODO for now only setting base years for generational. But really to fully match SOA calculator functionality, Static projection needs to be revised to use this as well. 
-                self.setMortBaseYears()
-
     def initializeDiscountRatesDF(self):
-        years_to_project = max(self.MaxProjectionAge - self.PrimaryAnnuitantAge, self.MaxProjectionAge - self.BeneficiaryAge)
+
+        if self.includeBeneficiary:
+            years_to_project = max(self.MaxProjectionAge - self.PrimaryAnnuitantAge, self.MaxProjectionAge - self.BeneficiaryAge)
+        else:
+            years_to_project = self.MaxProjectionAge - self.PrimaryAnnuitantAge
+
         self.discount_rates_df = pd.DataFrame({'Discount_Year':np.arange(years_to_project)}) 
         self.discount_rates_df['spot_rate'] = self.DiscountRate
-
+          
         #TODO Replace this whole thing with reading an input file whenever we get around to adding inputs
 
-    def projectMortalityGenerational(self, Age):
-        #TODO - this is projecting both genders - probably should filter to only one based on what is passed.
-        #remove rows before Val Year/ Before min age
-        mortProjMinYear = min(self.PreBCABaseYear, self.PostBCABaseYear) #this could get set outside this function, but later on we might have different mort for the ptcp vs beneficiary, in which case, we would want to set mort proj min year on a per-ptcp basis
-        mortProjMinAge = Age
-        individual_mort_proj_rates_df = self.mort_proj_rates_df[(self.mort_proj_rates_df['ValYear']>mortProjMinYear) & (self.mort_proj_rates_df['Age']>= mortProjMinAge)]
+    def calc_nPx_toBOY(self, Age, mort_type, mort_table):
 
-        #if more mort proj years than needed, remove those excess years. If fewer mort proj years than needed, duplicate the final row
-        mortProjMaxYear = np.max(individual_mort_proj_rates_df['ValYear'])
-        mortRatesMaxYear = self.MaxProjectionAge - Age + self.ValuationYear
-        if mortProjMaxYear > mortRatesMaxYear:
-            individual_mort_proj_rates_df = individual_mort_proj_rates_df[individual_mort_proj_rates_df['ValYear']<=mortRatesMaxYear]
-        elif mortProjMaxYear < mortRatesMaxYear:
-            yearsToRepeat = range(mortProjMaxYear, mortRatesMaxYear+1)
-            individual_mort_proj_rates_df['Repeat'] = 0
-            individual_mort_proj_rates_df['Repeat'] = individual_mort_proj_rates_df['Repeat'].where(individual_mort_proj_rates_df['ValYear']<mortProjMaxYear, 1)
-            MortProjRepeats_df = pd.DataFrame({'ValYear':yearsToRepeat})
-            MortProjRepeats_df['Repeat'] = 1
-            individual_mort_proj_rates_df = individual_mort_proj_rates_df.merge(MortProjRepeats_df, how = 'left', on = 'Repeat')
-            individual_mort_proj_rates_df['ValYear'] = individual_mort_proj_rates_df['ValYear_x'].where(individual_mort_proj_rates_df['ValYear_x']<mortProjMaxYear, individual_mort_proj_rates_df['ValYear_y'])
+        mort_table_copy = mort_table.copy()
 
-            individual_mort_proj_rates_df = individual_mort_proj_rates_df.drop(columns = {'Repeat', 'ValYear_x', 'ValYear_y'})
+        mort_table_copy = mort_table_copy.rename(columns ={'Qx':mort_type+'_Qx_Annual_Applicable', 'Age':mort_type+'_Age_Mortality'})
+        mort_table_copy[mort_type+'_Px_Annual_to_pmt'] = 1 - mort_table_copy[mort_type+'_Qx_Annual_Applicable']
+        mort_table_copy[mort_type+'_nPx_toBOY'] = mort_table_copy[mort_type+'_Px_Annual_to_pmt'].cumprod()
+        mort_table_copy[mort_type+'_nPx_toBOY'] = mort_table_copy[mort_type+'_nPx_toBOY'].round(self.intermediateRoundingDigits) #ROUND
 
-            #The year to project to is different for each age. If age X today, project age [X] Qx to [Val Year], but project age [X + 1] Qx to [Val Year + 1]
-            individual_mort_proj_rates_df['MaxProjYear_thisAge'] = individual_mort_proj_rates_df['Age'] - Age + self.ValuationYear
-            individual_mort_proj_rates_df = individual_mort_proj_rates_df[individual_mort_proj_rates_df['ValYear']<= individual_mort_proj_rates_df['MaxProjYear_thisAge']]
+        mort_table_copy['Year'] = mort_table_copy[mort_type+'_Age_Mortality'] - Age + 1
+        self.pvf_calc_df = self.pvf_calc_df.merge(mort_table_copy, how = 'left', on = ['Year'])
 
-            #groupby product - return Sex, Age, Annual improvement Factor, rename the aggregated column to 'TotalMortalityImprovementFactor'
-            individual_mort_proj_rates_df = individual_mort_proj_rates_df[['Sex', 'Age', 'AnnualMortalityImprovementFactor']].groupby(['Sex', 'Age']).prod().reset_index().rename(columns = {'AnnualMortalityImprovementFactor':'TotalMortalityImprovementFactor'})
-
-            return individual_mort_proj_rates_df
-
-    def projectMortality(self):
-        match self.ProjectionMethod:
-            case 'None':
-                self.projectedAnnualMort_df = self.base_mort_df.copy()
-            case 'Static':
-                self.mort_proj_rates_df['AnnualMortalityImprovementFactor'] = 1 - self.mort_proj_rates_df['ImprovementRate']
-                self.mort_proj_rates_df['TotalMortalityImprovementFactor'] = self.mort_proj_rates_df['AnnualMortalityImprovementFactor'] ** self.StaticProjectionYears
-                self.projectedAnnualMort_df = self.base_mort_df.merge(self.mort_proj_rates_df[['Sex', 'Age', 'TotalMortalityImprovementFactor']], how = 'left', on = ['Sex', 'Age'])
-                self.projectedAnnualMort_df['Qx'] = self.projectedAnnualMort_df['Qx'] * self.projectedAnnualMort_df['TotalMortalityImprovementFactor']
-                self.projectedAnnualMort_df = self.projectedAnnualMort_df.drop(columns = {'TotalMortalityImprovementFactor'})
-            case 'Generational':
-                #Only if Generation Mort Proj and joint annuity - need separatate Beneficiary mort Tables
-                if self.AnnuityType == 'J&S' or self.AnnuityType == 'JL':
-                    self.projectedBeneficiaryAnnualMort_df = self.base_mort_df.copy()
-
-                self.mort_proj_rates_df['AnnualMortalityImprovementFactor'] = 1 - self.mort_proj_rates_df['ImprovementRate']
-                PrimaryAnnuitant_mort_proj =  self.projectMortalityGenerational(self.PrimaryAnnuitantAge)
-
-                #join and perform mort improvement
-                self.projectedAnnualMort_df = self.base_mort_df.merge(PrimaryAnnuitant_mort_proj[['Sex', 'Age', 'TotalMortalityImprovementFactor']], how = 'left', on = ['Sex', 'Age'])
-                self.projectedAnnualMort_df['Qx'] = self.projectedAnnualMort_df['Qx'] * self.projectedAnnualMort_df['TotalMortalityImprovementFactor']
-                self.projectedAnnualMort_df = self.projectedAnnualMort_df.drop(columns = {'TotalMortalityImprovementFactor'})                   
-
-                if self.AnnuityType == 'J&S' or self.AnnuityType == 'JL':
-                    Beneficiary_mort_proj = self.projectMortalityGenerational(self.BeneficiaryAge)
-                    self.projectedBeneficiaryAnnualMort_df = self.base_mort_df.merge(Beneficiary_mort_proj[['Sex', 'Age', 'TotalMortalityImprovementFactor']], how = 'left', on = ['Sex', 'Age'])
-                    self.projectedBeneficiaryAnnualMort_df['Qx'] = self.projectedBeneficiaryAnnualMort_df['Qx'] * self.projectedBeneficiaryAnnualMort_df['TotalMortalityImprovementFactor']
-                    self.projectedBeneficiaryAnnualMort_df = self.projectedBeneficiaryAnnualMort_df.drop(columns = {'TotalMortalityImprovementFactor'})     
-
-
-                #TODO DOWNSTREAM DIFFERENT MORT TABLES IF GENERATIONAL MORTALITY
-                #if self.AnnuityType == 'J&S' or self.AnnuityType == 'JL'...repeat mort proj procedure
-
-    def BlendMortality(self, mort_df):
-
-        mort_df['blend_rate'] = self.BlendingMalePercentage
-        mort_df['blend_rate'] = mort_df['blend_rate'].where(mort_df['Sex'] == 'M', 1-self.BlendingMalePercentage)
-        mort_df['join_sex'] = mort_df['Sex'].map({'M':'F', 'F':'M'})
-        other_gender_mortalities_df = mort_df[['Age', 'Sex', 'MortalityTableName', 'Qx']]
-        other_gender_mortalities_df = other_gender_mortalities_df.rename(columns = {'Sex':'join_sex', 'Qx':'second_gender_Qx'})
-        mort_df = mort_df.rename(columns = {'Qx':'first_gender_Qx'})
-        mort_df = mort_df.merge(other_gender_mortalities_df, how = 'left', on = ['Age', 'MortalityTableName', 'join_sex'])
-        mort_df['Qx'] = (mort_df['first_gender_Qx'] * mort_df['blend_rate']) + (mort_df['second_gender_Qx'] * (1 - mort_df['blend_rate']))
-        mort_df = mort_df.drop(columns = {'blend_rate', 'first_gender_Qx', 'second_gender_Qx', 'join_sex'})
-
-        return mort_df
-        
-    def adjustDiscountMethod(self):
-        #TODO
-        pass
-
-    def calc_nPx_toBOY(self, Age, mort_type):
-        #Only if Generation Mort Proj and Beneficiary mortality - need to use alternative mort table
-        if (self.ProjectionMethod == 'Generational') and (mort_type == 'Beneficiary'):
-            filtered_Annualmort_df = self.projectedBeneficiaryAnnualMort_df[self.projectedBeneficiaryAnnualMort_df['MortType']==mort_type][['Qx', 'Age']]
-        else:
-            filtered_Annualmort_df = self.projectedAnnualMort_df[self.projectedAnnualMort_df['MortType']==mort_type][['Qx', 'Age']]
-
-
-        filtered_Annualmort_df = filtered_Annualmort_df.rename(columns ={'Qx':mort_type+'_Qx_Annual_Applicable', 'Age':mort_type+'_Age_Mortality'})
-        filtered_Annualmort_df[mort_type+'_Px_Annual_to_pmt'] = 1 - filtered_Annualmort_df[mort_type+'_Qx_Annual_Applicable']
-        filtered_Annualmort_df[mort_type+'_nPx_toBOY'] = filtered_Annualmort_df[mort_type+'_Px_Annual_to_pmt'].cumprod()
-        filtered_Annualmort_df[mort_type+'_nPx_toBOY'] = filtered_Annualmort_df[mort_type+'_nPx_toBOY'].round(self.intermediateRoundingDigits) #ROUND
-
-        filtered_Annualmort_df['Year'] = filtered_Annualmort_df[mort_type+'_Age_Mortality'] - Age + 1
-        self.pvf_calc_df = self.pvf_calc_df.merge(filtered_Annualmort_df, how = 'left', on = ['Year'])
-
-    def calc_nPX_withinYear(self, Age, mort_type):
+    def calc_nPX_withinYear(self, Age, mort_type, mort_table):
         
         #if BOY pmts and annual pmt timing, directly set _Qx_Period to 0. For every other scenario, a Qx within the period is needed (either monthly Qxs or pmt occurs after mortality decrement)
         if (self.pmt_timing_within_period == 0) and (self.periods_per_year ==1):
             self.pvf_calc_df[mort_type+'_Qx_Period'] = 0
         else:
-            if (self.ProjectionMethod == 'Generational') and (mort_type == 'Beneficiary'):
-                filtered_Annualmort_df = self.projectedBeneficiaryAnnualMort_df[self.projectedBeneficiaryAnnualMort_df['MortType']==mort_type][['Qx', 'Age']]            
-            else:
-                filtered_Annualmort_df = self.projectedAnnualMort_df[self.projectedAnnualMort_df['MortType']==mort_type][['Qx', 'Age']]
+            mort_table_copy = mort_table.copy()
 
-            filtered_Annualmort_df = filtered_Annualmort_df.rename(columns ={'Qx':mort_type+'_Qx_Period_Applicable', 'Age':mort_type+'_Age'})
-            filtered_Annualmort_df[mort_type+'_Qx_Period'] = filtered_Annualmort_df[mort_type+'_Qx_Period_Applicable']/self.periods_per_year
-            filtered_Annualmort_df[mort_type+'_Qx_Period'] = filtered_Annualmort_df[mort_type+'_Qx_Period'].round(self.intermediateRoundingDigits) #ROUND
-            filtered_Annualmort_df['Year'] = filtered_Annualmort_df[mort_type+'_Age'] - Age #TODO this feels duplicative with calc_nPx_toBOY
-            self.pvf_calc_df = self.pvf_calc_df.merge(filtered_Annualmort_df[['Year', mort_type+'_Qx_Period']], how = 'left', on = ['Year'])
+            mort_table_copy = mort_table_copy.rename(columns ={'Qx':mort_type+'_Qx_Period_Applicable', 'Age':mort_type+'_Age'})
+            mort_table_copy[mort_type+'_Qx_Period'] = mort_table_copy[mort_type+'_Qx_Period_Applicable']/self.periods_per_year
+            mort_table_copy[mort_type+'_Qx_Period'] = mort_table_copy[mort_type+'_Qx_Period'].round(self.intermediateRoundingDigits) #ROUND
+            mort_table_copy['Year'] = mort_table_copy[mort_type+'_Age'] - Age #TODO this feels duplicative with calc_nPx_toBOY
+            self.pvf_calc_df = self.pvf_calc_df.merge(mort_table_copy[['Year', mort_type+'_Qx_Period']], how = 'left', on = ['Year'])
 
         self.pvf_calc_df[mort_type+'_nPX_withinYear'] = 1 - (self.pvf_calc_df[mort_type+'_Qx_Period'] * (self.pvf_calc_df['period_in_year']+self.pmt_timing_within_period))
 
-    def calc_nPx(self, Age, mort_type):
-        self.calc_nPx_toBOY(Age, mort_type)
-        self.calc_nPX_withinYear(Age, mort_type)
+    def calc_nPx(self, Age, mort_type, mort_table):
+        self.calc_nPx_toBOY(Age, mort_type, mort_table)
+        self.calc_nPX_withinYear(Age, mort_type, mort_table)
             
         #calc nPx
         #if self.pmt_timing_within_period == 0: # only if BO Period payments, 
@@ -288,14 +329,147 @@ class Annuity_Factor_Calculator:
         
         self.pvf_calc_df[mort_type+'_nPx'] = self.pvf_calc_df[mort_type+'_nPx_toBOY'] * self.pvf_calc_df[mort_type+'_nPX_withinYear']
 
+    def GetBaseYear(self, MortalityTableName):
+        mortTableInfo = pd.read_parquet(self.mortInfoPath
+                            , columns=['MortalityTableName', 'BaseYear']
+                            , filters = [('MortalityTableName', '==', MortalityTableName)]) 
+        
+        BaseYear = mortTableInfo[mortTableInfo['MortalityTableName']==MortalityTableName]['BaseYear'].values[0] #TODO assuming in index row 0??? why        
+
+        return BaseYear
+
+    def getPA_PreCom_Mortality(self, mortTableGenerator):
+        #PA Pre-Commencement inputs:
+        if self.PrimaryAnnuitantGender == 'M':
+            setbackYears = self.SetbackYearsMale
+            alt_setBackYears = self.SetbackYearsFemale
+        elif self.PrimaryAnnuitantGender == 'F':
+            setbackYears = self.SetbackYearsFemale
+            alt_setBackYears = self.SetbackYearsMale            
+        else:
+            print("invalid Primary AnnuitantGender for Setback")
+
+        StartValYear = self.GetBaseYear(self.MortalityBeforeBCA)
+
+        match self.ProjectionMethod:
+            case 'None':
+                numberOfYearsToProject = 0
+            case 'Static':
+                numberOfYearsToProject = self.ValuationYear - StartValYear + self.StaticProjectionYears #matched to SOA method
+            case 'Generational':
+                numberOfYearsToProject = self.ValuationYear - StartValYear + self.BenefitCommencementAge - self.PrimaryAnnuitantAge
+
+
+        #NOTE IF THERE IS AN AGE SETBACK, THE MORT TABLE FLIP INCLUDES THE SETBACK AGE. THIS IS A METHOD CHOICE. SHOULDN'T MORT TABLE FLIP OCCUR AT ANNUITY COMMENCEMENT? 
+                
+        Ptcp_PreCom_Mort = mortTableGenerator.CreateMortTable(self.MortalityBeforeBCA, self.PrimaryAnnuitantAge, self.BenefitCommencementAge + setbackYears, 
+                                                              self.PrimaryAnnuitantGender, setbackYears, self.BlendMortalityRates, self.BlendingMalePercentage, alt_setBackYears, 
+                                                              self.ProjectionMethod, self.ProjectionScale, StartValYear, numberOfYearsToProject, self.PrimaryAnnuitantAge, 
+                                                              self.ValuationYear)
+
+        return Ptcp_PreCom_Mort
+        
+    def getPA_PostCom_Mortality(self, mortTableGenerator):
+        #PA Pre-Commencement inputs:
+        if self.PrimaryAnnuitantGender == 'M':
+            setbackYears = self.SetbackYearsMale
+            alt_setBackYears = self.SetbackYearsFemale
+        elif self.PrimaryAnnuitantGender == 'F':
+            setbackYears = self.SetbackYearsFemale
+            alt_setBackYears = self.SetbackYearsMale            
+        else:
+            print("invalid Primary AnnuitantGender for Setback")
+
+        StartValYear = self.GetBaseYear(self.MortalityAfterBCA)
+
+        match self.ProjectionMethod:
+            case 'None':
+                numberOfYearsToProject = 0
+            case 'Static':
+                numberOfYearsToProject = self.ValuationYear - StartValYear + self.StaticProjectionYears #matched to SOA calculator method
+            case 'Generational':
+                numberOfYearsToProject = self.ValuationYear - StartValYear + self.MaxProjectionAge - self.PrimaryAnnuitantAge
+        
+        Ptcp_PostCom_Mort = mortTableGenerator.CreateMortTable(self.MortalityAfterBCA, self.BenefitCommencementAge + setbackYears, self.MaxProjectionAge, 
+                                                               self.PrimaryAnnuitantGender, setbackYears, self.BlendMortalityRates, self.BlendingMalePercentage, alt_setBackYears, 
+                                                               self.ProjectionMethod, self.ProjectionScale, StartValYear, numberOfYearsToProject, self.PrimaryAnnuitantAge, 
+                                                               self.ValuationYear) #TODO Passing PA age into here is slightly confusing - I wonder if there's a better way to unwind this for generational mort proj
+
+        return Ptcp_PostCom_Mort
+
+    def getBene_PreCom_Mortality(self, mortTableGenerator):
+        #Bene Pre-Commencement inputs:
+        if self.BeneficiaryGender == 'M':
+            setbackYears = self.SetbackYearsMale
+            alt_setBackYears = self.SetbackYearsFemale
+        elif self.BeneficiaryGender == 'F':
+            setbackYears = self.SetbackYearsFemale
+            alt_setBackYears = self.SetbackYearsMale            
+        else:
+            print("invalid Beneficiary AnnuitantGender for Setback")
+
+        StartValYear = self.GetBaseYear(self.MortalityBeforeBCA)
+
+        match self.ProjectionMethod:
+            case 'None':
+                numberOfYearsToProject = 0
+            case 'Static':
+                numberOfYearsToProject = self.ValuationYear - StartValYear + self.StaticProjectionYears #matched to SOA calculator method
+            case 'Generational':
+                numberOfYearsToProject = self.ValuationYear - StartValYear + self.BenefitCommencementAge - self.PrimaryAnnuitantAge #I don't like this       
+
+        Ptcp_PreCom_Mort = mortTableGenerator.CreateMortTable(self.MortalityBeforeBCA, self.BeneficiaryAge, self.BenefitCommencementAge, self.BeneficiaryGender, 
+                                                              setbackYears, self.BlendMortalityRates, self.BlendingMalePercentage, alt_setBackYears, self.ProjectionMethod, self.ProjectionScale, 
+                                                              StartValYear, numberOfYearsToProject, self.BeneficiaryAge, self.ValuationYear)
+
+        return Ptcp_PreCom_Mort
+        
+    def getBene_PostCom_Mortality(self, mortTableGenerator):
+        #Bene Pre-Commencement inputs:
+        if self.BeneficiaryGender == 'M':
+            setbackYears = self.SetbackYearsMale
+            alt_setBackYears = self.SetbackYearsFemale
+        elif self.BeneficiaryGender == 'F':
+            setbackYears = self.SetbackYearsFemale
+            alt_setBackYears = self.SetbackYearsMale            
+        else:
+            print("invalid Primary AnnuitantGender for Setback")
+
+        StartValYear = self.GetBaseYear(self.MortalityAfterBCA)
+
+        match self.ProjectionMethod:
+            case 'None':
+                numberOfYearsToProject = 0
+            case 'Static':
+                numberOfYearsToProject = self.ValuationYear - StartValYear + self.StaticProjectionYears #matched to SOA calculator method
+            case 'Generational':
+                numberOfYearsToProject = self.ValuationYear - StartValYear + self.MaxProjectionAge - self.BeneficiaryAge
+
+        Ptcp_PostCom_Mort = mortTableGenerator.CreateMortTable(self.MortalityAfterBCA, self.BenefitCommencementAge, self.MaxProjectionAge, self.BeneficiaryGender, setbackYears, 
+                                        self.BlendMortalityRates, self.BlendingMalePercentage, alt_setBackYears, self.ProjectionMethod, self.ProjectionScale, StartValYear, 
+                                        numberOfYearsToProject, self.BeneficiaryAge, self.ValuationYear) 
+
+        return Ptcp_PostCom_Mort
+
     def CalcPVF(self, testMode = False):
-        self.projectMortality()
-        self.adjustDiscountMethod()
+        #Get PA Mort table, and if the right annuity type, beneficiary mort table
+
+        mortTableGenerator = MortTableGenerator()
+        PA_PreCom_Mort = self.getPA_PreCom_Mortality(mortTableGenerator)
+        PA_PostCom_Mort = self.getPA_PostCom_Mortality(mortTableGenerator)
+
+        PrimaryAnnuitantMortality = pd.concat([PA_PreCom_Mort, PA_PostCom_Mort])
+
+        if (self.AnnuityType == 'J&S') or (self.AnnuityType == 'JL'):
+            Bene_PreCom_Mort = self.getBene_PreCom_Mortality(mortTableGenerator)
+            Bene_PostCom_Mort = self.getBene_PostCom_Mortality(mortTableGenerator)
+
+            BeneficiaryMortality = pd.concat([Bene_PreCom_Mort, Bene_PostCom_Mort])
 
         #joins
-        self.calc_nPx(self.PrimaryAnnuitantAge, mort_type = 'PrimaryAnnuitant')
+        self.calc_nPx(self.PrimaryAnnuitantAge, 'PrimaryAnnuitant', PrimaryAnnuitantMortality)
         if (self.AnnuityType=="J&S") or (self.AnnuityType=='JL'):
-                self.calc_nPx(self.BeneficiaryAge, mort_type = 'Beneficiary')
+                self.calc_nPx(self.BeneficiaryAge, 'Beneficiary', BeneficiaryMortality)
 
         self.calc_discountFactor()
         self.calc_PaymentAmounts()
@@ -396,7 +570,6 @@ class Annuity_Factor_Calculator:
         discountFactor = self.pvf_calc_df[self.pvf_calc_df['Time_Period_Begin']==self.BenefitCommencementTime_Period_Begin]['discount_factor'].values[0]
 
         return nPx * discountFactor * 11/24
-
 
     def calculateDiscountedPV(self):
         match self.AnnuityType:

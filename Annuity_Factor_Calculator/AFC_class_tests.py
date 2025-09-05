@@ -501,7 +501,7 @@ Test18Inputs = {
     , 'MortalityAfterBCA':"RP2000_HealthyAnnuit" #Pri2012_Total_Retiree
     , 'ProjectionMethod':"Static" #None, Static, Generational
     , 'ProjectionScale':"AA" #
-    , 'StaticProjectionYears':2025-2000 #NOTE inconsistency with SOA Calculator - SOA calculator assumes 25 static projection years from the different between base year and val year
+    , 'StaticProjectionYears':0 #NOTE inconsistency with SOA Calculator - SOA calculator assumes 25 static projection years from the different between base year and val year
     , 'BlendMortalityRates':False #TRUE, FALSE
     , 'BlendingMalePercentage':.5 #0-1
     , 'SetbackYearsMale':0 #-10->10
@@ -555,7 +555,7 @@ Test20Inputs = {
     , 'MortalityAfterBCA':"Pri2012_Total_Retiree" #Pri2012_Total_Retiree
     , 'ProjectionMethod':"Generational" #None, Static, Generational
     , 'ProjectionScale':"MP2021" #
-    , 'StaticProjectionYears':2025-2012 #0-50
+    , 'StaticProjectionYears':0 #0-50
     , 'BlendMortalityRates':False #TRUE, FALSE
     , 'BlendingMalePercentage':.5 #0-1
     , 'SetbackYearsMale':0 #-10->10
